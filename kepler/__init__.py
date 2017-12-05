@@ -8,6 +8,9 @@ class StateVector:
 		self.position = pos
 		self.velocity = vel
 
+	def __str__(self):
+		return 'pos = ' + str(self.position) + '; vel = ' + str(self.velocity) + ';'
+
 class SimpleOrbit:
 	def __init__(self, ecc, sma, aop, inc, mu, ta):
 		self.mu = mu
@@ -80,6 +83,15 @@ class Orbit:
 
 		self.updateMeanMotion()
 
+	def __str__(self):
+		return 'sma: ' + str(self.sma) \
+			+ ';\tecc: ' + str(self.ecc) \
+			+ ';\tinc: ' + str(np.rad2deg(self.inc)) \
+			+ ';\taop: ' + str(np.rad2deg(self.aop)) \
+			+ ';\tloan: ' + str(np.rad2deg(self.loan)) \
+			+ ';\tta: ' + str(np.rad2deg(self.getTrueAnomalyByEpoch(self.epoch))) \
+			+ ';\tepoch: ' + str(self.epoch) + ';'
+
 	def setSma(self, sma):
 		self.sma = sma
 		return self
@@ -148,7 +160,7 @@ class Orbit:
 
 	def getEccentricAnomalyByMeanAnomaly(self, ma):
 		maxIter = 30
-		delta = 0.00000001
+		delta = 1e-10
 		M = ma
 		E = 0
 		F = 0
@@ -192,7 +204,19 @@ class Orbit:
 		else:
 			return 2 * math.atanh(math.tan(ta / 2) / math.sqrt((self.ecc + 1) / (self.ecc - 1)))
 
-	def getOwnCoordsByTrueAnomaly(ta):
+	def getTrueAnomalyByMeanAnomaly(self, ma):
+		return self.getTrueAnomalyByEccentricAnomaly(
+			self.getEccentricAnomalyByMeanAnomaly(ma)
+		)
+
+	def getTrueAnomalyByEccentricAnomaly(self, ea):
+		if self.isElliptic:
+			phi = math.atan2(math.sqrt(1 - self.ecc**2) * math.sin(ea), math.cos(ea) - self.ecc)
+			return phi if (phi > 0) else phi + 2 * math.pi
+		else:
+			return 2 * math.atan(math.sqrt((self.ecc + 1) / (self.ecc - 1)) * math.tanh(ea / 2))
+
+	def getOwnCoordsByTrueAnomaly(self, ta):
 		r = self.sma * (1 - self.ecc**2) / (1 + self.ecc * math.cos(ta))
 		return Vector3(r * math.cos(ta), r * math.sin(ta), 0)
 
@@ -260,7 +284,7 @@ def createOrbitByState(state, mu, epoch = 0):
 	e = math.sqrt(1 - (angMomentum.mag**2 / (mu * sma)))
 
 	p = pos.rotateZ(-loan).rotateX(-inc)
-	u = math.atan2(p.y , p.x)
+	u = math.atan2(p.y, p.x)
 
 	radVel = pos.dot(vel)
 	cos = (sma*(1 - e*e) / posMag - 1) / e

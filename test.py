@@ -1,6 +1,5 @@
 from kepler import *
 
-orbit = createOrbitByState(StateVector(Vector3(7000, 0, 0), Vector3(0, 10.67, 0)), 398600.44, 0)
+orbit = createOrbitByState(StateVector(Vector3(7000, -200, 0), Vector3(0, 11, 0)), 398600.44, 0)
 
-print(orbit.ecc)
-print(orbit.sma)
+print(orbit.getStateByEpoch(10))

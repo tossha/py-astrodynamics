@@ -4,7 +4,7 @@ import numpy as np
 class Vector3:
 
 	def __init__(self, x, y, z):
-		self.v = np.array([x, y, z])
+		self.v = np.array([float(x), float(y), float(z)])
 
 	def __str__(self):
 		return self.v.__str__()
@@ -33,15 +33,16 @@ class Vector3:
 	def z(self, val):
 		self[2] = val
 
+	@property
+	def mag(self):
+		return math.sqrt((self.v ** 2).sum())
+
 	def __getitem__(self, key):
 		return self.v[key]
 
 	def __setitem__(self, key, value):
 		self.v[key] = value
 		return self
-
-	def mag(self):
-		return math.sqrt((self.v ** 2).sum())
 
 	def rotateX(self, radians):
 		sin = math.sin(radians)

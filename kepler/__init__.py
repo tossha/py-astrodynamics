@@ -1,7 +1,6 @@
 from linalg import *
 
-# EARTH_MU = 398600.4415
-EARTH_MU = 398600.8
+EARTH_MU = 398600.4415
 
 class StateVector:
 
@@ -63,7 +62,7 @@ class SimpleOrbit:
 
 class Orbit:
 
-	def __init__(self, ecc, sma, aop, inc, epoch, mu, ta = False, loan = 0, ma = False):
+	def __init__(self, ecc, sma, aop, inc, loan, anomaly, epoch, mu, isAnomalytrue = True):
 		self.mu = mu
 		self.sma = sma
 		self.ecc = ecc
@@ -71,38 +70,15 @@ class Orbit:
 		self.loan = loan
 		self.aop = aop
 		self.epoch = epoch
-		self.ta = ta
-		self.m0 = ma if ma != False else self.getMeanAnomalyByTrueAnomaly(ta)
+
+		self.isElliptic = self.ecc < 1
+
+		if isAnomalytrue:
+			self.m0 = self.getMeanAnomalyByTrueAnomaly(anomaly)
+		else:
+			self.m0 = anomaly
 
 		self.updateMeanMotion()
-
-	# @property
-	# def m0(self):
-	# 	# if self.m0 != False:
-	# 	# 	return self.m0
-	# 	# self.m0 = self.getMeanAnomalyByTrueAnomaly(self.ta)
-	# 	# return self.m0
-	# 	return self.getMeanAnomalyByTrueAnomaly(self.ta)
-
-	@property
-	def p(self):
-		return self.sma * (1 - self.ecc ** 2)
-
-	@property
-	def r(self):
-		return self.p / (1 + self.ecc * math.cos(self.ta))
-
-	@property
-	def c(self):
-		return math.sqrt(self.mu * self.p)
-
-	@property
-	def vm(self):
-		return self.c / self.r
-
-	@property
-	def vr(self):
-		return math.sqrt(self.mu / self.p) * self.ecc * math.sin(self.ta)
 
 	def setSma(self, sma):
 		self.sma = sma
@@ -136,14 +112,29 @@ class Orbit:
 		self.mu = mu
 		return self
 
+	def addPrecession(self, r, j2, epoch):
+		rate = -3/2 * r**2 * j2 * math.cos(self.inc) * self.meanMotion / self.sma**2 / (1 - self.ecc**2)**2
+		self.m0 = self.getMeanAnomalyByEpoch(epoch)
+		self.loan += rate * (epoch - self.epoch)
+		self.epoch = epoch
+		return self
+
 	def updateMeanMotion(self):
-		self.meanMotion = math.sqrt(self.mu / self.sma) / self.sma;
+		self.meanMotion = math.sqrt(self.mu / abs(self.sma)) / abs(self.sma);
 
 	def getMeanAnomalyByEpoch(self, epoch):
 		return self.m0 + self.meanMotion * (epoch - self.epoch)
 
+	def getTrueAnomalyByEpoch(self, epoch):
+		return self.getTrueAnomalyByMeanAnomaly(
+			self.getMeanAnomalyByEpoch(epoch)
+		)
+
 	def getMeanAnomalyByEccentricAnomaly(self, ea):
-		return ea - self.ecc * math.sin(ea)
+		if self.isElliptic:
+			return ea - self.ecc * math.sin(ea)
+		else:
+			return self.ecc * math.sinh(ea) - ea
 
 	def getMeanAnomalyByTrueAnomaly(self, ta):
 		return self.getMeanAnomalyByEccentricAnomaly(
@@ -158,32 +149,52 @@ class Orbit:
 	def getEccentricAnomalyByMeanAnomaly(self, ma):
 		maxIter = 30
 		delta = 0.00000001
-		M = ma / (2.0 * math.pi)
+		M = ma
 		E = 0
 		F = 0
 		i = 0
 
-		M = 2.0 * math.pi * (M - math.floor(M))
+		if self.isElliptic:
+			M = M / (2 * math.pi)
 
-		E = M if (self.ecc < 0.8) else math.pi
+			M = 2.0 * math.pi * (M - math.floor(M))
 
-		F = E - self.ecc * math.sin(M) - M
+			E = M if (self.ecc < 0.8) else math.pi
 
-		while ((abs(F) > delta) and (i < maxIter)):
-			E = E - F / (1.0 - self.ecc * math.cos(E))
-			F = E - self.ecc * math.sin(E) - M
-			i = i + 1
+			F = E - self.ecc * math.sin(M) - M
+
+			while ((abs(F) > delta) and (i < maxIter)):
+				E = E - F / (1.0 - self.ecc * math.cos(E))
+				F = E - self.ecc * math.sin(E) - M
+				i = i + 1
+		else:
+			E = (math.log(2 * (abs(M) + 1/3)) + 1) / self.ecc + (1 - 1 / self.ecc) * math.asinh(abs(M) / self.ecc)
+			E *= math.copysign(1, M)
+
+			F = self.ecc * math.sinh(E) - E - M
+
+			while ((abs(F) > delta) and (i < maxIter)):
+				E = E - F / (self.ecc * math.cosh(E) - 1)
+				F = self.ecc * math.sinh(E) - E - M
+				i = i + 1
 
 		return E
 
 	def getEccentricAnomalyByTrueAnomaly(self, ta):
-		cos = math.cos(ta)
-		sin = math.sin(ta)
-		cosE = (self.ecc + cos) / (1 + self.ecc * cos)
-		sinE = math.sqrt(1 - self.ecc * self.ecc) * sin / (1 + self.ecc * cos)
-		ang = math.acos(cosE)
+		if self.isElliptic:
+			cos = math.cos(ta)
+			sin = math.sin(ta)
+			cosE = (self.ecc + cos) / (1 + self.ecc * cos)
+			sinE = math.sqrt(1 - self.ecc * self.ecc) * sin / (1 + self.ecc * cos)
+			ang = math.acos(cosE)
 
-		return ang if (sinE > 0) else (2 * math.pi - ang)
+			return ang if (sinE > 0) else (2 * math.pi - ang)
+		else:
+			return 2 * math.atanh(math.tan(ta / 2) / math.sqrt((self.ecc + 1) / (self.ecc - 1)))
+
+	def getOwnCoordsByTrueAnomaly(ta):
+		r = self.sma * (1 - self.ecc**2) / (1 + self.ecc * math.cos(ta))
+		return Vector3(r * math.cos(ta), r * math.sin(ta), 0)
 
 	# see http://microsat.sm.bmstu.ru/e-library/Ballistics/kepler.pdf
 	def getStateByEccentricAnomaly(self, ea):
@@ -209,7 +220,19 @@ class Orbit:
 		)
 
 	def getStateByEpoch(self, epoch):
-		return self.getStateByEccentricAnomaly(self.getEccentricAnomalyByEpoch(epoch))
+		if self.isElliptic:
+			return self.getStateByEccentricAnomaly(self.getEccentricAnomalyByEpoch(epoch))
+
+		ta = self.getTrueAnomalyByEpoch(epoch)
+		pos = self.getOwnCoordsByTrueAnomaly(ta)
+		flightPathAngle = math.atan(self.ecc * math.sin(ta) / (1 + self.ecc * math.cos(ta)))
+		vel = Vector3(math.sqrt(self.mu * (2 / pos.mag - 1 / self.sma)), 0, 0).rotateZ(ta + math.pi / 2 - flightPathAngle)
+		
+		return StateVector(
+			pos.rotateZ(self.aop).rotateX(self.inc).rotateZ(self.loan),
+			vel.rotateZ(self.aop).rotateX(self.inc).rotateZ(self.loan)
+		)
+
 
 	def getState(self):
 		return self.getStateByEccentricAnomaly(self.getEccentricAnomalyByTrueAnomaly(self.ta))
@@ -224,31 +247,28 @@ class Orbit:
 
 		return [vm, vr, vb]
 
-# see http://microsat.sm.bmstu.ru/e-library/Ballistics/kepler.pdf
 def createOrbitByState(state, mu, epoch = 0):
-	pos = state.position;
-	vel = state.velocity;
-	posMag = pos.mag()
+	pos = state.position
+	vel = state.velocity
+	posMag = pos.mag
 
-	angMomentum = pos.cross(vel);
+	angMomentum = pos.cross(vel)
 
-	raan = math.atan2(angMomentum.x, -angMomentum.y);
-	inc = math.atan2(math.sqrt(angMomentum.x**2 + angMomentum.y**2), angMomentum.z);
-	sma = (mu * posMag) / (2.0 * mu - posMag * vel.mag()**2);
-	e = math.sqrt(1.0 - (angMomentum.mag()**2 / (mu * sma)));
+	loan = math.atan2(angMomentum.x, -angMomentum.y)
+	inc = math.atan2(math.sqrt(angMomentum.x**2 + angMomentum.y**2), angMomentum.z)
+	sma = (mu * posMag) / (2 * mu - posMag * vel.mag**2)
+	e = math.sqrt(1 - (angMomentum.mag**2 / (mu * sma)))
 
-	p = pos.rotateZ(-raan).rotateX(-inc);
-	u = math.atan2(p.y , p.x);
+	p = pos.rotateZ(-loan).rotateX(-inc)
+	u = math.atan2(p.y , p.x)
 
-	radVel = pos.dot(vel) / posMag;
-	cosE = (sma - posMag) / (sma * e);
-	sinE = (posMag * radVel) / (e * math.sqrt(mu * sma));
+	radVel = pos.dot(vel)
+	cos = (sma*(1 - e*e) / posMag - 1) / e
+	ta = math.pi if cos < -1 else (0 if cos > 1 else math.acos(cos))
 	
-	ta = math.atan2(math.sqrt(1.0 - e**2) * sinE, cosE - e);
-	ta = ta if (ta > 0) else (ta + 2 * math.pi);
+	if radVel < 0:
+		ta = -ta
 
 	aop = (u - ta) if ((u - ta) > 0) else 2 * math.pi + (u - ta);
 
-	# print(e, sma, aop/math.pi*180, inc/math.pi*180)
-
-	return Orbit(e, sma, aop, inc, epoch, mu, ta, raan)
+	return Orbit(e, sma, aop, inc, loan, ta, epoch, mu)

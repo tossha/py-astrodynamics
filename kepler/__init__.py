@@ -124,6 +124,10 @@ class Orbit:
 		self.mu = mu
 		return self
 
+	def getNodalPrecessionByEpoch(self, r, j2, epoch):
+		rate = -3/2 * r**2 * j2 * math.cos(self.inc) * self.meanMotion / self.sma**2 / (1 - self.ecc**2)**2
+		return rate * (epoch - self.epoch)
+
 	def addPrecession(self, r, j2, epoch):
 		rate = -3/2 * r**2 * j2 * math.cos(self.inc) * self.meanMotion / self.sma**2 / (1 - self.ecc**2)**2
 		self.m0 = self.getMeanAnomalyByEpoch(epoch)
@@ -160,7 +164,7 @@ class Orbit:
 
 	def getEccentricAnomalyByMeanAnomaly(self, ma):
 		maxIter = 30
-		delta = 1e-10
+		delta = 1e-11
 		M = ma
 		E = 0
 		F = 0

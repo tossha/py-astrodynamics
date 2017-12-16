@@ -3,7 +3,7 @@ import numpy as np
 
 class Vector3:
 
-	def __init__(self, x, y, z):
+	def __init__(self, x = 0, y = 0, z = 0):
 		self.v = np.array([float(x), float(y), float(z)])
 
 	def __str__(self):
@@ -42,6 +42,12 @@ class Vector3:
 
 	def __setitem__(self, key, value):
 		self.v[key] = value
+		return self
+
+	def fromArray(self, arr):
+		self.v[0] = arr[0]
+		self.v[1] = arr[1]
+		self.v[2] = arr[2]
 		return self
 
 	def rotateX(self, radians):
@@ -83,10 +89,14 @@ class Vector3:
 		npRes = np.add(self.v, v.v)
 		return Vector3(npRes[0], npRes[1], npRes[2])
 
+	def mul(self, m):
+		npRes = self.v * m
+		return Vector3(npRes[0], npRes[1], npRes[2])
+
 	def dot(self, v):
 		return np.dot(self.v, v.v)
 
 	def unit():
-		npRes = self.v / self.mag()
+		npRes = self.v / self.mag
 		return Vector3(npRes[0], npRes[1], npRes[2])
 
